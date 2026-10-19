@@ -1,0 +1,7 @@
+# Local runtime state - recreated by the app, never shared
+cybershield.log
+cybershield-sites.json
+*.new.exe
+
+# Build scratch
+*.tmp
