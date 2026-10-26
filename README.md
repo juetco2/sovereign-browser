@@ -4,6 +4,10 @@ A parent picks the websites. The browser itself runs in Google Cloud Shell, so
 nothing is installed on the child's machine, and the list is enforced by Firefox
 policy — not by hiding buttons.
 
+**Download:** [Sovereign Browser.exe](https://github.com/codesofretards/sovereign-browser/releases/latest)
+— Windows 10/11, one file, no installer. It installs the Google Cloud CLI and
+signs in by itself.
+
 > **On the name:** the app is **Sovereign Browser**. A few internal names still
 > say `cybershield` on purpose — `cybershield-sites.json`, `cybershield.log`, and
 > `~/cybershield/` inside Cloud Shell. Keeping them means an existing install
