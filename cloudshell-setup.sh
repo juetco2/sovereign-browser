@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# STAI Cybershield - Cloud Shell installer
+# Sovereign Browser - Cloud Shell installer
 #
 #   Paste this whole file into a Cloud Shell terminal. It installs itself to
 #   ~/cybershield/setup.sh, then builds and runs the locked Firefox session.
@@ -14,7 +14,7 @@
 mkdir -p "$HOME/cybershield"
 cat > "$HOME/cybershield/setup.sh" <<'CYBERSHIELD_SETUP_EOF'
 #!/usr/bin/env bash
-# STAI Cybershield - locked Firefox session for Google Cloud Shell.
+# Sovereign Browser - locked Firefox session for Google Cloud Shell.
 set -euo pipefail
 
 # Locate ourselves from the script path, NOT $HOME: the boot hook runs this as
@@ -77,7 +77,7 @@ def write_hub(cfg, sites, mode):
         if not cards:
             cards = ['<p>No sites have been allowed yet.</p>']
 
-    page = """<!doctype html><html><head><meta charset="utf-8"><title>Cybershield</title>
+    page = """<!doctype html><html><head><meta charset="utf-8"><title>Sovereign Browser</title>
 <style>
  body{margin:0;font:16px system-ui,sans-serif;background:#0b1020;color:#e8ecf7;
       display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh}
@@ -86,10 +86,10 @@ def write_hub(cfg, sites, mode):
  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:min(760px,90vw)}
  a{padding:22px 20px;border-radius:12px;text-decoration:none;font-weight:600;
    display:flex;justify-content:space-between;align-items:center}
- .ok{background:#12331f;color:#7ef2a8;border:1px solid #1e5c37}
+ .ok{background:#10213d;color:#bcd9ff;border:1px solid #24406b}
  small{font-weight:400;opacity:.7}
 </style></head><body>
-<h1>STAI Cybershield</h1>
+<h1>Sovereign Browser</h1>
 <p>%(note)s</p>
 <div class="grid">
 %(cards)s
@@ -205,7 +205,7 @@ cp "$DIR/policies.json" "$BUILD/policies.json"
 # always matches the policy that is enforced.
 # ---------------------------------------------------------------------------
 cat > "$DIR/start.html" <<'HTML'
-<!doctype html><html><head><meta charset="utf-8"><title>Cybershield</title>
+<!doctype html><html><head><meta charset="utf-8"><title>Sovereign Browser</title>
 <style>
  body{margin:0;font:16px system-ui,sans-serif;background:#0b1020;color:#e8ecf7;
       display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh}
@@ -214,11 +214,11 @@ cat > "$DIR/start.html" <<'HTML'
  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;width:min(760px,90vw)}
  a{padding:22px 20px;border-radius:12px;text-decoration:none;font-weight:600;
    display:flex;justify-content:space-between;align-items:center}
- .ok{background:#12331f;color:#7ef2a8;border:1px solid #1e5c37}
- .no{background:#33121a;color:#ff8fa3;border:1px solid #5e1e2a}
+ .ok{background:#10213d;color:#bcd9ff;border:1px solid #24406b}
+ .no{background:#2a1620;color:#ff9aa5;border:1px solid #4a2431}
  small{font-weight:400;opacity:.7}
 </style></head><body>
-<h1>STAI Cybershield</h1>
+<h1>Sovereign Browser</h1>
 <p>Managed locked session &mdash; the parent decides what is reachable</p>
 <div class="grid">
   <a class="ok" href="https://en.wikipedia.org/wiki/Computer_security">Allowed <small>wikipedia.org</small></a>
@@ -233,18 +233,45 @@ HTML
 python3 "$DIR/write_policy.py"
 
 # ---------------------------------------------------------------------------
-# 3. Kiosk launcher
+# 3. Session launcher
+#
+# A normal Firefox window, maximised - NOT --kiosk. Kiosk mode hides the whole
+# browser UI, and then there is no back button, no reload and no address bar, so
+# a child can only ever click links on the page in front of them. With the real
+# toolbar visible the browser is navigable; the WebsiteFilter policy is what
+# keeps it locked, not the absence of buttons.
+#
+# wmctrl (installed in the image) tells openbox to maximise the window. If that
+# ever fails the window is still a normal one - just not full-screen.
+#
+# Firefox is restarted if it is closed: no panel, no desktop, and closing the
+# window should not leave a blank machine.
 # ---------------------------------------------------------------------------
-cat > "$DIR/firefox-kiosk" <<'KIOSK'
+cat > "$DIR/firefox-session" <<'KIOSK'
 #!/bin/sh
 for _ in $(seq 1 30); do xdpyinfo -display :1 >/dev/null 2>&1 && break; sleep 1; done
 sleep 3
-exec /usr/bin/firefox --kiosk --new-instance http://localhost/start.html
+while :; do
+  /usr/bin/firefox --new-instance http://localhost/start.html &
+  ff=$!
+  i=0
+  while [ $i -lt 45 ]; do
+    ids=$(wmctrl -lx 2>/dev/null | awk 'tolower($0) ~ /firefox/ {print $1}')
+    [ -n "$ids" ] && break
+    sleep 1
+    i=$((i + 1))
+  done
+  for id in $ids; do
+    wmctrl -i -r "$id" -b add,maximized_vert,maximized_horz
+  done
+  wait $ff
+  sleep 2
+done
 KIOSK
-chmod +x "$DIR/firefox-kiosk"
+chmod +x "$DIR/firefox-session"
 
 cp "$DIR/start.html" "$BUILD/start.html"
-cp "$DIR/firefox-kiosk" "$BUILD/firefox-kiosk"
+cp "$DIR/firefox-session" "$BUILD/firefox-session"
 
 # ---------------------------------------------------------------------------
 # 4. Image
@@ -264,6 +291,14 @@ RUN rm -f /etc/apt/sources.list.d/google-chrome.list \
           /usr/share/applications/chromium-browser-sound.desktop \
           /usr/local/bin/chromium-browser-sound.sh \
           /usr/local/bin/chrome-good
+
+# wmctrl lets the session launcher maximise the Firefox window. Installed only
+# AFTER the dead google-chrome apt source is gone - with it present, apt-get
+# update dies on "repository is not signed" (NO_PUBKEY FD533C07C264648F) and
+# takes the whole build down with it.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends wmctrl \
+ && rm -rf /var/lib/apt/lists/*
 
 # Fallback policy, baked in so a bare `docker run` is never wide open.
 # At normal runtime this is replaced by the parent's list via a bind mount.
@@ -287,10 +322,10 @@ RUN sed -i \
       -e 's/^programs=xvfb,wm,lxpanel,pcmanfm,x11vnc,novnc$/programs=xvfb,wm,x11vnc,novnc/' \
       /etc/supervisor/conf.d/supervisord.conf
 
-# fullscreen kiosk Firefox, started once X is up
-COPY firefox-kiosk /usr/local/bin/firefox-kiosk
-RUN chmod +x /usr/local/bin/firefox-kiosk \
- && printf '\n[program:cybershield]\npriority=30\ndirectory=/root\ncommand=/usr/local/bin/firefox-kiosk\nenvironment=DISPLAY=":1",HOME="/root",USER="root"\nstartsecs=5\n' \
+# maximised Firefox with its normal toolbar, started once X is up
+COPY firefox-session /usr/local/bin/firefox-session
+RUN chmod +x /usr/local/bin/firefox-session \
+ && printf '\n[program:cybershield]\npriority=30\ndirectory=/root\ncommand=/usr/local/bin/firefox-session\nenvironment=DISPLAY=":1",HOME="/root",USER="root"\nstartsecs=5\n' \
       >> /etc/supervisor/conf.d/supervisord.conf
 
 # A container restart keeps the filesystem, so Xvfb's lock file and its socket
@@ -305,9 +340,14 @@ RUN printf '#!/bin/sh\nrm -f /tmp/.X1-lock /tmp/.X11-unix/X1\nexec /usr/bin/Xvfb
 RUN /usr/bin/firefox --version 2>&1 | head -1 || true
 DOCKERFILE
 
-if ! $DOCKER image inspect "$IMAGE" >/dev/null 2>&1; then
+# Rebuild when the files that DEFINE the image change, not only when the image is
+# missing. Otherwise a machine that already has an older build (no toolbar, old
+# kiosk launcher) keeps running it forever - the image tag alone never changes.
+BUILD_ID=$(cat "$BUILD/Dockerfile" "$BUILD/firefox-session" | md5sum | cut -c1-12)
+HAVE_ID=$($DOCKER image inspect -f '{{index .Config.Labels "cybershield.build"}}' "$IMAGE" 2>/dev/null || true)
+if [ "$HAVE_ID" != "$BUILD_ID" ]; then
   echo "== building $IMAGE (first run pulls ~2 GB - do this BEFORE the demo) =="
-  $DOCKER build -t "$IMAGE" "$BUILD"
+  $DOCKER build --label "cybershield.build=$BUILD_ID" -t "$IMAGE" "$BUILD"
 fi
 
 # ---------------------------------------------------------------------------

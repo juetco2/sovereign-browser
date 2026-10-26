@@ -1,4 +1,4 @@
-# STAI Cybershield - run log
+# Sovereign Browser - run log
 
 A running record of what works and what breaks, so a failure is never a mystery.
 Every entry is something we actually saw, not something we assumed.
@@ -11,12 +11,12 @@ Every entry is something we actually saw, not something we assumed.
 
 ## 1. Where it stands
 
-Verified on 19 Oct 2026, ~12:35 PM, on a Cloud Shell VM in `europe-west4`.
+Verified on 19 Oct 2026, ~12:35 PM first, and again ~10 PM (see OK-7), on a Cloud Shell VM in `europe-west4`. Re-verified 26 Oct 2026 after the rename and the UI redesign (OK-8).
 
 | # | What | Evidence |
 |---|------|----------|
 | 1 | Locked browser runs in Cloud Shell | `docker ps` -> `cybershield: Up (healthy)`, port `6080->80` |
-| 2 | It shows one hub page, no desktop | screenshot `hub-page.png` - kiosk Firefox on the hub, no taskbar, no icons |
+| 2 | It shows one hub page, no desktop | screenshot `hub-page.png` - maximised Firefox with its own toolbar on the hub, no taskbar, no icons |
 | 3 | No taskbar, no desktop icons, no file manager | `supervisorctl status` has no `lxpanel` / `pcmanfm`; 8 of 8 programs `RUNNING` |
 | 4 | The parent's website list reaches the machine | `~/cybershield/policy.json` = `{"mode":"allow","sites":["youtube.com","google.com"]}` |
 | 5 | That list becomes a real Firefox policy | `policies.json` has those domains in `WebsiteFilter.Exceptions` |
@@ -26,6 +26,7 @@ Verified on 19 Oct 2026, ~12:35 PM, on a Cloud Shell VM in `europe-west4`.
 | 9 | The hub page matches the list, automatically | with `google.com, youtube.com` the page lists exactly those two; with wikipedia/khanacademy it lists those two instead |
 | 10 | Reset survives being run repeatedly | two setups back to back -> `Up (healthy)`, all 8 programs `RUNNING` |
 | 11 | The app writes a log of everything it does | `cybershield.log` next to the `.exe`, entries below |
+| 12 | The buttons work by hand, first try | `cybershield.log` 21:48-22:03 - Launch (2 sites), Turn off, Launch (4 sites), Turn off, all OK; see OK-7 |
 
 Session URL (must be opened while signed in as the Cloud Shell account - it is
 account-locked, see OPEN-1):
@@ -72,7 +73,60 @@ locked browser is really showing without logging into the noVNC page.
 Worth checking, because a duplicated remote command would double a policy write:
 `rm -f /tmp/c; echo X >> /tmp/c; wc -l < /tmp/c` -> `1`.
 
+### OK-6 Turn off session, and Launch brings it back
+Ran the button's exact remote command against the live session:
+
+```
+docker stop cybershield >/dev/null 2>&1; ...; docker inspect -f {{.State.Status}} cybershield
+-> exited
+CYBERSHIELD_OFF=ok
+CYBERSHIELD_OFF=ok
+```
+
+Then a normal Launch: the checksum probe skipped the install, the container came
+back `(healthy)` and both `CYBERSHIELD_HOST=...` markers were returned. Off and
+back on with no extra steps.
+
+### OK-7 The first real click-through, by hand
+The app was driven through its buttons on 19 Oct, 21:47-22:03, and every action
+worked first try (`cybershield.log`):
+
+```
+21:47:26  Launch clicked - 2 sites   ->  21:48:30  Launch OK - 2 sites
+21:57:08  Turn off clicked           ->  21:57:23  Turn off OK
+22:01:01  Launch clicked - 4 sites   ->  22:01:57  Launch OK - 4 sites
+22:03:07  Turn off clicked           ->  22:03:22  Turn off OK
+```
+
+And the demo's block beat, proven on the live session: with the 2-site allow
+list, `youtube.com` typed into the session's own address bar returns Firefox's
+"Blocked Page - your organization has blocked access" - captured as
+`blocked-page.png`.
+
 ---
+
+### OK-8 Rename to Sovereign Browser + redesigned UI
+- The app is **Sovereign Browser** now: window title, the sign-in window, the
+  error lines in the status strip, the `.exe` name, the two `.cmd` helpers and
+  the session's hub page. Internal names deliberately keep the old prefix
+  (`cybershield-sites.json`, `cybershield.log`, `~/cybershield/`) so an existing
+  install keeps its list and its session.
+- Splash: logo on the app's navy, crossfading into the main window. ~2.7 s from
+  double-click to a usable window, logged as `splash shown` -> `main window
+  shown - crossfading in` -> `main window faded in` -> `splash closed`.
+- No stock WinForms controls any more: every button, the list, the mode switch
+  and the progress bar are owner-drawn in the logo's palette (no light-grey
+  borders or scrollbars). Dark title bar via DWM, logged as
+  `dark title bar applied (rc=0)`.
+- The two-segment mode switch writes the config on click, verified by reading
+  the file after each click: left segment -> `"mode":"allow"`, right ->
+  `"mode":"block"`.
+- The same build ran the real session end to end: `Launch clicked` 21:37:24 ->
+  `Launch OK` 21:40:54 (2 sites, block mode), including a container rebuild
+  because the hub page changed.
+- The embedded installer still matches `cloudshell-setup.sh` byte for byte
+  (md5 `9184696444dec98866041c72f96519ff`), so a fresh Cloud Shell provisions
+  the rebranded session by itself.
 
 ## 3. FAIL - what went wrong, and the fix
 
@@ -173,6 +227,11 @@ docker exec cybershield ffmpeg ... -y /tmp/s.png; echo SEPB64; docker exec cyber
 here. The wrapped form is proven, so the helper uses that. **This is the one to
 suspect first if a future screenshot/upload looks empty.**
 
+**RESOLVED** (19 Oct, evening) - it was the reader, not plink: the last line(s)
+of output are lost when the ssh process exits, and a single-line base64 payload
+*is* one line. See FAIL-10. After the drain fix the single-line form works, and
+`hub-page.png` was captured that way.
+
 ### FAIL-8 `docker restart` left the X display dead  **(FIXED)**
 **Symptom.** After the app restarted the container, the X programs came up bad:
 
@@ -222,6 +281,111 @@ $body = [scriptblock]::Create($hit.Extent.Text.Trim().Substring(1, $hit.Extent.T
 Result: 43 s, `CYBERSHIELD_HOST=cs-<session-id>`. The UI path is proven, not
 assumed. Useful trick for the next time something only fails behind a button.
 
+### FAIL-10 The last line of every reply could vanish - markers, screenshots, all of it  **(the silent one)**
+**Symptom.** Intermittently `CYBERSHIELD_RESET=ok` never appeared, a Launch that
+had just returned a working URL reported "no CYBERSHIELD_HOST in the reply", and
+the base64 screenshot came back empty (FAIL-7). The work always happened; the
+report did not arrive.
+
+**Cause.** `Invoke-RemoteOnce` reads stdout line by line (`ReadLineAsync` +
+`Wait(200)`) and stops the moment the process exits. A line that was *mid-read*
+at that moment sits in a pending task and is never appended, and a later
+`ReadToEnd` cannot recover it - the pipe is already closed. Which line is lost
+depends on timing; it is often the final marker.
+
+**Proof.** Same 3-line command, marker placed after one long line, 3 runs each:
+old reader lost the marker **3 of 3** times; with the drain fix, **0 of 3**.
+Earlier, a marker echo missing from every run also turned out to be this bug,
+not a failed command.
+
+**Fix.** Before `ReadToEnd`, every pending stdout/stderr `ReadLineAsync` task is
+awaited (`Wait(2000)`) and its line appended. Every app marker is also echoed
+twice with a pause between copies, so one lost copy still leaves one.
+
+### FAIL-11 Firefox was locked so hard it could not be navigated
+**Symptom.** "All the buttons, ie back front searchbar nothing works." There
+were literally no back/reload/address-bar controls in the session: the launcher
+started Firefox with `--kiosk`, which hides the whole browser UI. The site list
+was enforced, but the only way to move was clicking the links on the hub page.
+
+**Cause.** Kiosk mode was chosen for the "nothing but the hub" look; it also
+removes every way of navigating - including the ways the policy is supposed to
+govern (typing a URL, back/forward, reload).
+
+**Fix.** The session launcher (`firefox-session`) opens a normal Firefox window
+and maximises it through openbox (`wmctrl`, installed in the image). The lock is
+unchanged: allow mode still blocks `<all_urls>` outside the list, so a typed URL
+that is not allowed lands on the blocked-by-policy page. Verified on the live
+session: screenshot shows title bar, tab, back/forward/reload and the address
+bar at `localhost/start.html`.
+
+### FAIL-12 The window *around* the session was a normal browser
+**Symptom.** Even with an in-session toolbar, the PC window holding the session
+is the PC's own browser - its address bar and back button act on the PC, not on
+the locked browser, so the controls on screen are the wrong ones.
+
+**Fix.** Launch opens the session in a chromeless app window (Edge or Chrome
+`--app=<url>`): no address bar, no tabs, no back button on the outside. Falls
+back to the default browser if neither is installed; the README says which
+controls are the session's.
+
+### FAIL-13 A fresh Cloud Shell could never start the session from the app
+**Symptom.** Launch on a Cloud Shell with no `~/cybershield` failed with a pile
+of "No such file or directory". The README's answer was "paste
+`cloudshell-setup.sh` by hand first"; the app itself could not recover.
+
+**Fix.** The app now carries the installer inside itself (base64), probes the
+remote side, and when it is missing or stale uploads it in chunks, proves the
+upload by md5, runs it (image build, minutes) and only then runs the request.
+Proven end-to-end: `~/cybershield` was wiped on the live VM and the app's own
+code rebuilt everything unattended - upload md5 matched, `INSTALL_EXIT=0`,
+container `healthy`, session URL returned (~4.5 min).
+
+### FAIL-14 A session-side update could never reach an existing Cloud Shell
+**Symptom.** Fixing the session code (Dockerfile, launcher) changed nothing on
+a machine that already had an older `~/cybershield`: the app only checked that
+`setup.sh` *existed*, and the image build only ran when the image was missing.
+
+**Fix.** Two checksums. The app compares `md5(setup.sh)` on Cloud Shell with the
+copy it carries and updates whenever they differ. On the session side the image
+build carries a label hashed from the Dockerfile + launcher, so a changed recipe
+rebuilds. Exercised for real: the toolbar change rolled onto the live VM with no
+manual steps.
+
+### FAIL-15 The image build died on a dead apt source
+**Symptom.** `failed to solve ... exit code: 100`; `install.log` showed
+`E: The repository 'https://dl.google.com/linux/chrome/deb stable InRelease' is
+not signed` (`NO_PUBKEY FD533C07C264648F`).
+
+**Cause.** The base image ships a google-chrome apt source whose key is gone,
+and `apt-get update` fails on it - taking the whole build with it.
+
+**Fix.** `wmctrl` is installed only *after* the dead chrome source is removed,
+in the same Dockerfile. Rebuild succeeded (`INSTALL_EXIT=0`), `/usr/bin/wmctrl`
+present, window maximised.
+
+### FAIL-16 The checksum probe broke gcloud's own argument parser
+**Symptom.** `ERROR: (gcloud.cloud-shell.ssh) unrecognized arguments: -f1; else
+echo none; ...` - one probe call in testing.
+
+**Cause.** The Windows `cmd` shim under gcloud eats double quotes; `cut -d" "`
+fell apart and `-f1` looked like a gcloud flag.
+
+**Fix.** The probe uses no quotes and no pipes: plain `md5sum <file>`, parsed on
+the PC side. Verified live: it returns `9bce501c...  /home/.../setup.sh` and the
+launch skips straight to the policy push (~40 s).
+
+### FAIL-17 One cosmetic PowerShell error in a reply tail  **(tracked, not fixed)**
+**Symptom.** One Launch's reply tail ended with `Remove-Item ... run.cmd:
+ItemNotFoundException` even though the Launch succeeded.
+
+**Cause.** The worker deletes its one-line shim when done; the cleanup can run
+twice, and the second delete's error lands in the captured output. A later
+Launch did not show it - intermittent and harmless.
+
+**Fix (pending).** Guard the cleanup with `-ErrorAction SilentlyContinue`.
+Filed rather than rushed so the shipped `.exe` never disagrees with its source.
+
 ---
 
 ## 4. OPEN - known, and not verifiable from here
@@ -247,9 +411,11 @@ itself loads, but that also makes the image's file-browser service
 (`fsweb`, port 8080) reachable from inside the locked browser. Tighten to the
 exact hub path if this matters.
 
-### OPEN-4 Only the allow list was proven, not the block list
-The policy generator writes both, and the block-list branch was reviewed, but
-only allow mode has been exercised end to end. Worth one demo run in block mode.
+### OPEN-4 Block mode exercised at policy level, not visually
+Block mode has now run end to end (`sites=1 mode=block`, the domain landed in
+`policies.json`, Reset came back clean). The *visual* block-page proof on record
+is the allow-mode one (`blocked-page.png`), so one live block-mode demo run is
+still worth doing before the day.
 
 ### OPEN-5 Cloud Shell limits (by design, not bugs)
 Unavailable to under-18 accounts; 50 h/week quota; 12 h session cap; a session

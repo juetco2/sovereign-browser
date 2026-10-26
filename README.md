@@ -1,17 +1,48 @@
-# STAI Cybershield — Cloud Shell session + Windows launcher
+# Sovereign Browser — a locked browser session for kids, driven from Windows
+
+A parent picks the websites. The browser itself runs in Google Cloud Shell, so
+nothing is installed on the child's machine, and the list is enforced by Firefox
+policy — not by hiding buttons.
+
+> **On the name:** the app is **Sovereign Browser**. A few internal names still
+> say `cybershield` on purpose — `cybershield-sites.json`, `cybershield.log`, and
+> `~/cybershield/` inside Cloud Shell. Keeping them means an existing install
+> keeps its website list and its live session; nothing in the UI shows them.
 
 | File | Where it runs | What it does |
 |---|---|---|
-| `cloudshell-setup.sh` | Google Cloud Shell | Installs + builds + runs the locked Firefox session |
-| `Cybershield.exe` | Your PC | The app — website list, Launch, Reset |
-| `Launch Cybershield.cmd` | Your PC | Double-click alternative that runs the source directly |
-| `Rebuild Cybershield.cmd` | Your PC | Double-click this to recompile `Cybershield.exe` |
+| `cloudshell-setup.sh` | Google Cloud Shell | Installs + builds + runs the locked Firefox session — also carried inside the app, so a fresh Cloud Shell needs no pasting |
+| `Sovereign Browser.exe` | Your PC | The app — website list, Launch, Reset |
+| `Launch Sovereign Browser.cmd` | Your PC | Double-click alternative that runs the source directly |
+| `Rebuild Sovereign Browser.cmd` | Your PC | Double-click this to recompile `Sovereign Browser.exe` |
 | `cybershield-launcher.ps1` | Your PC | Source of the app — **don't double-click it**, see Gotchas |
-| `build-exe.ps1` | Your PC | The actual compile step, used by `Rebuild Cybershield.cmd` |
+| `build-exe.ps1` | Your PC | The actual compile step, used by `Rebuild Sovereign Browser.cmd` |
 | `cybershield-sites.json` | Your PC | Your website list (created on first save) |
 | `cybershield.log` | Your PC | Runtime log — every action, success or failure (created on first run) |
 | `RUN-LOG.md` | — | What works, what broke, why, and what is still open |
+| `DEMO-DAY.md` | — | The demo-day runbook: beats, checklist, recovery playbook |
 | `hub-page.png` | — | Screenshot of the live locked session |
+| `blocked-page.png` | — | What an off-list site gets — Firefox's blocked-by-policy page |
+
+---
+
+## How it fits together
+
+```mermaid
+flowchart LR
+    subgraph PC["Your PC"]
+        APP["Sovereign Browser.exe — site list,<br/>Launch / Reset / Turn off"]
+        WIN["session window<br/>(live view of the locked browser)"]
+    end
+    subgraph CLOUD["Google Cloud Shell (free tier)"]
+        BOX["locked Firefox in Docker —<br/>allow-only or except-list policy"]
+    end
+    APP -->|pushes the list, starts and stops it| BOX
+    BOX -->|session URL| WIN
+```
+
+Nothing runs on the child's machine: the locked browser lives in the cloud and
+the PC app only drives it.
 
 ---
 
@@ -27,25 +58,47 @@ Two modes:
 - **Allow everything except these** — blocklist. Normal browsing, minus the
   sites you name.
 
+![The locked session on its hub page](hub-page.png)
+
+The hub is generated from the parent's list every time the list is pushed, so it
+always matches the policy being enforced — here in *block* mode, it names the
+sites that are blocked.
+
 ---
 
-## 1. Cloud Shell side (do this first, ideally the day before)
+## 1. Cloud Shell side — the app does it
 
-Paste the whole contents of `cloudshell-setup.sh` into a Cloud Shell terminal
-and run it. It installs itself to `~/cybershield/`, builds the image (first run
-pulls ~2 GB), starts the session, and sets up auto-start for later VMs.
+Nothing to paste. The first **Launch session** sets Cloud Shell up by itself:
+the app uploads the installer it carries, checks the upload byte for byte,
+builds the image (the first run pulls ~2 GB — expect a few minutes) and starts
+the session. The bar at the bottom says `session update - …` while that happens.
 
-It prints a URL. Open it and confirm you land on the portal page in a
-fullscreen Firefox.
+The Cloud Shell side is also still in `cloudshell-setup.sh`, for running it by
+hand (a terminal, another machine, or recovery): paste it into a Cloud Shell
+terminal and run it. It installs itself to `~/cybershield/`, builds the image,
+starts the session, and sets up auto-start for later VMs.
 
-**Check the lock before the demo:** click `BLOCKED · YouTube` → you should get
-Firefox's blocked-by-policy page.
+Either way, the app then opens the session in its own app window — no address
+bar, no tabs, no back button on the *outside*, so the only browser controls on
+screen belong to the locked session itself.
+
+Inside, you get a normal, maximised Firefox: back, forward, reload and an
+address bar all work. The lock is enforced by the policy, not by hiding
+buttons.
+
+**Check the lock before the demo:** type a site that is **not** on your list —
+with the default list, `youtube.com` — and press Enter → you should get
+Firefox's blocked-by-policy page:
+
+![an off-list site is blocked by policy](blocked-page.png)
+
+Then go back.
 
 ---
 
 ## 2. PC side
 
-Just double-click **`Cybershield.exe`**. It sets itself up:
+Just double-click **`Sovereign Browser.exe`**. It sets itself up:
 
 - **No Google Cloud CLI?** The button in the top-right says *Install Google
   CLI*. Click it — the app installs the Cloud CLI for you (via `winget`, or the
@@ -73,7 +126,11 @@ While anything is running, the bar at the bottom of the window tracks it:
 - an `elapsed 1:24` counter the whole time, so you can tell it hasn't hung
 
 The same bar runs for **Launch** and **Reset**, showing what Cloud Shell is
-reporting line by line.
+reporting line by line. The first Launch also shows `session update - uploading
+the installer, chunk 1 of 5` and `session update - building the session image`
+while it sets Cloud Shell up. Every later Launch checks the session side by
+checksum and updates it automatically whenever the app carries a newer version
+— an updated app rolls the session forward by itself.
 
 Then use it:
 
@@ -81,6 +138,9 @@ Then use it:
    they get trimmed to the domain, and subdomains are covered automatically.
 2. Pick the mode.
 3. **Launch session** — pushes the list, starts the VM, opens the browser.
+4. Navigate normally *inside* the session window: back/forward/reload, or type
+   a site in its address bar. Allowed sites load; everything else gets the
+   blocked-by-policy page.
 
 Your list is saved in `cybershield-sites.json` next to the `.exe`, so it's
 there next time. The list is only pushed when you hit Launch or Reset.
@@ -92,11 +152,14 @@ there next time. The list is only pushed when you hit Launch or Reset.
 - **Install Google CLI / Sign in to Google** — top-right. Its label follows what
   is missing: install first, then sign in, then *Sign in again*. It stays
   clickable throughout, so a retry is always one click away.
-- **Launch session** — applies the website list, wakes Cloud Shell, waits for
-  the session, opens the browser.
+- **Launch session** — applies the website list, sets Cloud Shell up on first
+  use, waits for the session, opens it in an app window.
 - **Reset session** — applies the website list and restarts the container.
   A blank machine in ~10 seconds. Best demo beat: add a site, hit Reset, show
   the new site working live.
+- **Turn off session** — stops the locked browser session. The screen inside
+  goes dead until the next Launch (or Reset), which brings it straight back.
+  Use it when the demo is over; the Cloud Shell VM itself is left alone.
 
 ---
 
@@ -105,9 +168,9 @@ there next time. The list is only pushed when you hit Launch or Reset.
 - **Never double-click a `.ps1` on this PC.** `.ps1` has no file association
   registered here, so Windows shows *"How do you want to open this file?"*
   instead of running it — and it comes back every time you try. Use
-  `Cybershield.exe` to run the app and `Rebuild Cybershield.cmd` to recompile
-  it. Nothing in the app opens a `.ps1` either; the script is embedded inside
-  the `.exe`.
+  `Sovereign Browser.exe` to run the app and `Rebuild Sovereign Browser.cmd` to
+  recompile it. Nothing in the app opens a `.ps1` either; the script is embedded
+  inside the `.exe`.
 - **The app installs the Google Cloud CLI for you**, but it needs internet to do
   it, and Windows will likely show a UAC prompt — approve it. It uses `winget`
   when available; otherwise it downloads Google's own installer, which you click
@@ -120,11 +183,20 @@ there next time. The list is only pushed when you hit Launch or Reset.
   can open the URL — screen-share for judges.
 - Changing the list takes effect on the **next Launch or Reset**, not live.
   Firefox reads its policy at startup.
-- Cloud Shell discards the VM after ~1 hour idle. Launch wakes it again.
-- After a reconnect the image has to rebuild (~few minutes). Pre-build before
-  presenting.
-- If the launcher says "Could not reach the session", check by hand in Cloud
-  Shell:
+- **Navigate inside the session window, not outside it.** The outer app window
+  is only a viewer; the browser with the toolbar is the one *inside* it, and
+  that is the one the website list governs. (If a machine has no Edge or
+  Chrome, the app falls back to opening the session in your default browser —
+  in that case ignore the outer browser's own back/reload/address bar; only the
+  inner one is the session.)
+- Cloud Shell discards the VM after ~1 hour idle. Launch wakes it again, and
+  rebuilds the session's home folder if that was wiped too — no action needed.
+- After a reconnect the image may have to rebuild (~few minutes); Launch does
+  that by itself, and it also rebuilds the image by itself whenever the session
+  code changes. Still, pre-build before presenting.
+- If the launcher says "Could not reach the session", check the internet and
+  press Launch again first — the first run can take minutes. If it still fails,
+  check by hand in Cloud Shell:
   ```bash
   bash ~/cybershield/setup.sh
   docker logs cybershield
