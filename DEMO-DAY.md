@@ -9,7 +9,7 @@ Owner "me" = the assistant can do it; "you" = needs the account / the stage.
 |---|-----|--------------|-----|-------|--------|
 | 1 | Full click-through with the new build | surprises on stage | rehearse §2 once, start to finish | you | **partly done** — real use 19 Oct 21:48–22:03: Launch (2 sites), Turn off, Launch (4 sites), Turn off — all OK first try (OK-7); the scripted §2 run is still TODO |
 | 2 | Block mode never shown with evidence | "except these" is half the pitch | proof run on the live session | me | policy + Reset verified live; the visible block page on record is allow-mode — `blocked-page.png` |
-| 3 | Work uncommitted | losing it = losing the demo | pushed to GitHub (public) | me | DONE — `github.com/codesofretards/sovereign-browser` |
+| 3 | Work uncommitted | losing it = losing the demo | pushed to GitHub (public) | me | DONE — `github.com/juetco2/sovereign-browser` |
 | 4 | No backup recording | wifi / Cloud Shell can fail | record one clean 2-min run | you | TODO |
 | 5 | First-run image build is ~4.5 min | it must never appear live | pre-warm ritual (§3) + stay warm | you | ritual below |
 | 6 | SmartScreen / antivirus on a foreign laptop | judges' PC refuses the exe | two fallbacks (§4) | you | noted |

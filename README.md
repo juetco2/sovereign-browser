@@ -4,7 +4,7 @@ A parent picks the websites. The browser itself runs in Google Cloud Shell, so
 nothing is installed on the child's machine, and the list is enforced by Firefox
 policy — not by hiding buttons.
 
-**Download:** [Sovereign Browser.exe](https://github.com/codesofretards/sovereign-browser/releases/latest)
+**Download:** [Sovereign Browser.exe](https://github.com/juetco2/sovereign-browser/releases/latest)
 — Windows 10/11, one file, no installer. It installs the Google Cloud CLI and
 signs in by itself.
 
